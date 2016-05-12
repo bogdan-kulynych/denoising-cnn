@@ -8,3 +8,10 @@ Using Python 3+
 ```
 pip install -r requirements.txt
 ```
+
+### Testing
+
+Run from the project root
+```
+py.test
+```
