@@ -4,7 +4,7 @@
 
 - [ ] Small affine
 - [ ] JPEG
-- [ ] blur
+- [X] blur
 - [ ] sharpen
 - [ ] gaussian noise
 - [ ] Instagram color filters
