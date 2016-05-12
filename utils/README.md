@@ -1,4 +1,6 @@
-# Image filters
+# Utils
+
+## Image filters
 
 - [ ] Small affine
 - [ ] JPEG
