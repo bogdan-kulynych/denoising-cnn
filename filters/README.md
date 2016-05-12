@@ -1,9 +1,9 @@
-# Data augmentation utilities
+# Image filters
 
-- [] Small affine
-- [] JPEG
-- [] blur
-- [] sharpen
-- [] gaussian noise
-- [] Instagram color filters
-- [] vignetting
+- [ ] Small affine
+- [ ] JPEG
+- [ ] blur
+- [ ] sharpen
+- [ ] gaussian noise
+- [ ] Instagram color filters
+- [ ] vignetting
