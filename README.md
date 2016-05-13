@@ -11,5 +11,5 @@ pip3 install -r requirements.txt
 
 Run `py.test` from the project root
 ```
-py.test . . . .
+py.test .
 ```
