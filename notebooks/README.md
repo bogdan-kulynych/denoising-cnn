@@ -7,7 +7,7 @@
 
 ## Using
 
-To interact with a notebook locally, run:
+To interact with a notebook locally, Jupyter server needs to be launched:
 ```
 jupyter notebook
 ```
