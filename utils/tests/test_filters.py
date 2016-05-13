@@ -6,7 +6,8 @@ import pytest
 
 from PIL import Image
 
-from utils.filters import Noop, GaussianBlur, GaussianNoise, UniformNoise
+from utils.filters import Noop, GaussianBlur, GaussianNoise, UniformNoise, \
+                          Vignette
 
 
 @pytest.fixture()
@@ -17,18 +18,23 @@ def image(scope='module'):
 
 GAUSSIAN_BLUR_PARAMS = [1, 2, 5]
 GAUSSIAN_NOISE_PARAMS = list(itertools.product(
-    [0.1, 0.5, 0.9],
-    [0, 128, 255],
-    [10, 100, 200]))
+    (0.1, 0.5, 0.9),
+    (0, 128, 255),
+    (10, 100, 200)))
 UNIFORM_NOISE_PARAMS = [0.1, 0.5, 0.9]
+VIGNETTE_PARAMS = [
+    ((0, 0, 0), 0.5),
+    ((255, 255, 255), 0.75)]
 
 
 # Very basic test to check if a filter changes anything in
 # an image
 @pytest.mark.parametrize("filter_instance",
         [GaussianBlur(radius) for radius in GAUSSIAN_BLUR_PARAMS] +
-        [GaussianNoise(*args) for args in GAUSSIAN_NOISE_PARAMS] +
-        [UniformNoise(alpha) for alpha in UNIFORM_NOISE_PARAMS])
+        [GaussianNoise(alpha, loc, scale)
+            for alpha, loc, scale in GAUSSIAN_NOISE_PARAMS] +
+        [UniformNoise(alpha) for alpha in UNIFORM_NOISE_PARAMS] +
+        [Vignette(alpha, color) for alpha, color in VIGNETTE_PARAMS])
 def test_filter_changes_image(filter_instance, image):
     image_after_filter = filter_instance.apply(image)
     assert image.tobytes() != image_after_filter.tobytes()

@@ -9,4 +9,4 @@
 - [X] Gaussian noise
 - [X] Uniform noise
 - [ ] Instagram color filters
-- [ ] Vignette
+- [X] Vignette
