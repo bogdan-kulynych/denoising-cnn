@@ -35,7 +35,7 @@ def _imagemagick(image, command):
 
 def _format_rgba(color, alpha):
     """
-    >>> _rgba((128, 128, 128), 0.5)
+    >>> _format_rgba((128, 128, 128), 0.5)
     "'rgba(128,128,128,0.5)'"
     """
     r, g, b = color
@@ -105,3 +105,6 @@ class Vignette(object):
                    '-gravity center -compose multiply -flatten ')
         return _imagemagick(image, command.format(
             color=color, width=width, height=height))
+
+    def __repr__(self):
+        return 'Vignette({self.color}, {self.alpha})'.format(self=self)
