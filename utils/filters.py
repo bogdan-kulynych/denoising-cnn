@@ -28,7 +28,7 @@ def _imagemagick(image, command):
         subprocess.run(full_command, shell=True, check=True)
     except:
         raise RuntimeError('Error when running `{}`'.format(
-            expanded_command))
+            full_command))
     result = Image.open(output_filename)
     return result
 
