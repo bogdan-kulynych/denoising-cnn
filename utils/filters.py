@@ -19,13 +19,13 @@ def _imagemagick(image, command):
         raise TypeError('Image needs to be loaded from file')
     with tempfile.NamedTemporaryFile() as fp:
         output_filename = fp.name
-    expanded_command = ' '.join([
+    full_command = ' '.join([
         'convert',
         input_filename,
         command,
         output_filename])
     try:
-        subprocess.run(expanded_command, shell=True, check=True)
+        subprocess.run(full_command, shell=True, check=True)
     except:
         raise RuntimeError('Error when running `{}`'.format(
             expanded_command))
