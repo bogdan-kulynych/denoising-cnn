@@ -1,19 +1,8 @@
-import os
 import itertools
-
-import numpy as np
 import pytest
-
-from PIL import Image
 
 from utils.filters import Noop, GaussianBlur, GaussianNoise, UniformNoise, \
                           Vignette
-
-
-@pytest.fixture()
-def image(scope='module'):
-    image_path = os.path.join(os.path.dirname(__file__), 'lena.jpg')
-    return Image.open(image_path)
 
 
 FILTER_PARAMETER_SETS = {
