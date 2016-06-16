@@ -74,7 +74,7 @@ class GaussianNoise(object):
 
     def __repr__(self):
         return ('GaussianNoise('
-               '{self.alpha}, {self.loc}, {self.scale})').format(self=self)
+                '{self.alpha}, {self.loc}, {self.scale})').format(self=self)
 
 
 class UniformNoise(object):
@@ -108,25 +108,24 @@ class Vignette(object):
 
     def __repr__(self):
         return 'Vignette({self.color}, {self.alpha})'.format(self=self)
-    
-    
+
+
 class Gotham(object):
-    def __init__(self, color='#222b6d', gamma=0.5):
-        self.color = color
+    def __init__(self, gamma=0.5):
         self.gamma = gamma
-    
+
     def apply(self, image):
         command = ("-modulate 120,10,100 "
-                   "-fill '{color}' " 
-                   " -colorize 20 " 
-                   " -gamma {gamma} -contrast")
-        
-        return _imagemagick(image, command.format(color=self.color, gamma=self.gamma))
-    
-    def __perp__(self):
-        return 'Gotham({self.color}, {self.gamma})'.format(self=self)
-        
-        
+                   "-fill '#222b6d' "
+                   "-colorize 20 "
+                   "-gamma {gamma} -contrast")
+
+        return _imagemagick(image, command.format(gamma=self.gamma))
+
+    def __repr__(self):
+        return 'Gotham({self.gamma})'.format(self=self)
+
+
 class Kelvin(object):
     def __init__(self):
         pass
@@ -136,30 +135,30 @@ class Kelvin(object):
         color = _format_rgba((255, 153, 0), 0.5)
         command = ("-auto-gamma -modulate 120,50,100 "
                    "-size {width}x{height} -fill {color} "
-                   "-draw 'rectangle 0,0 {width},{height}' -compose multiply ")
+                   "-draw 'rectangle 0,0 {width},{height}' -compose multiply")
         return _imagemagick(image, command.format(
             color=color, width=width, height=height))
 
     def __repr__(self):
-        return 'Kelvin({self.color}, {self.alpha})'.format(self=self)
+        return 'Kelvin()'
 
-        
+
 class Lomo(object):
-    def __init__(self, rlvl = 33, glvl = 33):
-        self.rlvl = rlvl
-        self.glvl = glvl
-    
+    def __init__(self, red=0.33, green=0.33):
+        self.red = red * 100
+        self.green = green * 100
+
     def apply(self, image):
-        command = ("-channel R -level {rlvl}% "
-                   "-channel G -level {glvl}%")
-        
-        return _imagemagick(image, command.format(rlvl = self.rlvl, glvl = self.glvl))
-                            
-                            
-    def __perp__(self):
-        return 'Lomo({self.rlvl}, {self.glvl})'.format(self=self)
-    
-   
+        command = ("-channel R -level {red}% "
+                   "-channel G -level {green}%")
+
+        return _imagemagick(image, command.format(red=self.red,
+            green=self.green))
+
+    def __repr__(self):
+        return 'Lomo(red={self.red}, green={self.green})'.format(self=self)
+
+
 class Toaster(object):
     def __init__(self, brightness=150, saturation=80, hue=100, gamma=1.2):
         self.brightness = brightness
@@ -176,16 +175,15 @@ class Toaster(object):
                    "-size {width}x{height} "
                    "radial-gradient:#cdc1c5-#ff9966 "
                    "-gravity center -compose multiply -flatten "
-                   "-fill 'rgba(20,0,0)' -colorize 30% "
-                  )
-        
+                   "-fill 'rgba(20,0,0)' -colorize 30% ")
+
         return _imagemagick(image, command.format(
-            brightness=self.brightness, saturation=self.saturation, hue=self.hue, gamma=self.gamma, filename = image.filename, width=width, height=height))
+            brightness=self.brightness, saturation=self.saturation,
+            hue=self.hue, gamma=self.gamma, filename=image.filename,
+            width=width, height=height))
 
     def __repr__(self):
-        return 'Toaster({self.brightness}, {self.saturation}, {self.hue}, {self.gamma})'.format(self=self)
+        return ('Toaster(brightness={self.brightness}, '
+                'saturation={self.saturation}, '
+                'hue={self.hue}, gamma={self.gamma})').format(self=self)
 
-  
-        
-        
-        
