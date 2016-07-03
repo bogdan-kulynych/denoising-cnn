@@ -34,19 +34,32 @@ def sample_patches_multiscale(images, params, selected_images=[]):
     for i in tqdm(range(num_selected_images), desc='Calculating probability maps: '):
         scales_list = []
         for nscale in scales:
+            # returns image smaller than in Matlab
             im = imresize(selected_images[i, ::subsample_probmaps, ::subsample_probmaps, :], nscale, interp='bicubic')
-            im = np.sum(im, axis=2)  # verify axis
+
+            plt.show()
+            plt.imshow(im)
+
+            im = np.sum(im, axis=2)
             im = im - lowpassfilter(im, 2)
+
+            plt.imshow(im)
+
             energy_radius = min(patchsize / subsample_probmaps / 4, im.shape[0] / 4)
             im = lowpassfilter(im ** 2, energy_radius)
+
+            plt.imshow(im)
+
             borderwidth = np.ceil(patchsize / subsample_probmaps / 2) + 1
             im[:borderwidth, :] = 0
             im[-borderwidth:, :] = 0
-            im[:, :borderwidth, :] = 0
-            im[:, -borderwidth:, :] = 0
+            im[:, :borderwidth] = 0
+            im[:, -borderwidth:] = 0
             im[im < 0] = 0
-            image_probs[i] = np.sum(im) / (im.shape[0] - 2 * borderwidth) / (im.shape[1] - 2 * borderwidth) / im.shape[
-                2]
+
+            plt.imshow(im)
+
+            image_probs[i] = np.sum(im) / (im.shape[0] - 2 * borderwidth) / (im.shape[1] - 2 * borderwidth)
             scales_list.append(im)
         sampling_probmap.append(scales_list)
     scale_probs = np.ones(num_scales)
@@ -62,10 +75,10 @@ def sample_patches_multiscale(images, params, selected_images=[]):
     pos = {}
     pbar = tqdm(range(num_patches), desc='Sampling patches: ')
     while npatch < num_patches:
-        ncurrscale = randp(scale_probs, 1)
-        ncurrimage = randp(image_probs, 1)
+        ncurrscale = randp(scale_probs, 1) - 1
+        ncurrimage = randp(image_probs, 1) - 1
         im = sampling_probmap[ncurrimage][ncurrscale]
-        if np.all(im) > 0:
+        if np.any(im > 0):
             currpos = {}
             currinds = randp(im, 1)
             currx, curry = ind2sub(im.shape, currinds)
@@ -127,8 +140,15 @@ def show_cell(image_list, finsize=[64, 48]):
 
 
 def randp(P, shape):
-    x = np.random.rand(*shape)
-    return np.digitize(x, np.concatenate(0, np.cumsum(P) / np.sum(P)))
+    x = np.random.rand(shape)
+    if any(P < 0):
+        raise('All probabilities should be 0 or larger.')
+
+    if P.size == 0 or np.sum(P) == 0:
+        Warning(':ZeroProbabilities', 'All zero probabilities')
+        return np.zeros(x.shape)
+    else:
+        return np.digitize(x, np.insert(np.cumsum(P), 0, 0) / np.sum(P))
 
 
 def sub2ind(array_shape, rows, cols):

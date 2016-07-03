@@ -28,12 +28,11 @@ def lowpassfilter(img, sigma, batchsize=100, type='gaussian', verbose='false'):
             if verbose:
                 print('\n  Filtering batch %d/%d...' % (batch, nbatches))
             n = m
-            m = min(m + batchsize, img.shape[2]) # !!! something bad could happen (identical to matlab, indexing problems expected)
+            m = min(m + batchsize, img.shape[2]-1)
             tmplowpass = np.real(ifft2(fft2(tmpimg[:, :, n:m],axes=(1,0))*lowpass[:, :, None],axes=(1,0)))
             out[:, :, n:m] = tmplowpass[dx:dx + img.shape[0], dx:dx + img.shape[1], :]
 
         out = np.reshape(out, imsize)
-        print(np.sum(out[:, :, n:m]))
     else:
         raise NotImplementedError('lowpass for flattened image')
 
