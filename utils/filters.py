@@ -46,9 +46,12 @@ class Noop(object):
     def apply(self, image):
         return image.copy()
 
+    def __repr__(self):
+        return 'Noop()'
+
 
 class GaussianBlur(object):
-    def __init__(self, radius):
+    def __init__(self, radius=5):
         self.radius = radius
 
     def apply(self, image):
@@ -187,3 +190,14 @@ class Toaster(object):
                 'saturation={self.saturation}, '
                 'hue={self.hue}, gamma={self.gamma})').format(self=self)
 
+
+FILTERS = [
+    GaussianBlur,
+    GaussianNoise,
+    UniformNoise,
+    Vignette,
+    Gotham,
+    Kelvin,
+    Lomo,
+    Toaster,
+]
