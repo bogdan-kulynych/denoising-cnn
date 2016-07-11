@@ -30,12 +30,15 @@ Generates mini-batches of images with filter transformations applied, labels bei
 
 ```python
 data_generator = FilterImageDataGenerator()
-# Fitting generator is required for centering images, which is on by
-# default.
+
+# Fitting generator is required for featurewise image centering, which is on
+# by default.
 data_generator.fit(data)
-# List of filters that will be applied. Noop is required if original image
-# needs to appear in the mini-batches
+
+# List of filters that will be applied. Noop instance is required here if
+# the original image needs to be present in the mini-batches
 filters = [Noop(), UniformNoise(), Lomo()]
+
 # `flow` creates an infinite (cyclic) iterator over the mini-batches
 batch_iterator = data_generator.flow(data, filters, batch_size=batch_size)
 for b in range(math.ceil(N / batch_size)):
