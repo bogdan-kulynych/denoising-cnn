@@ -24,7 +24,7 @@ Add filter class in `utils/tests/filters.py`. Class should have `apply` method t
 ## Data generator
 
 ### `utils.preprocessing.FilterImageDataGenerator`
-Generates mini-batches of images with filter transformations applied, labels being transformation IDs.
+Generates mini-batches of images with filter transformations applied, labels being filter IDs.
 
 #### Usage
 
