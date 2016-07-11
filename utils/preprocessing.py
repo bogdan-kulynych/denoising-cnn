@@ -1,3 +1,4 @@
+import os
 import random
 import numpy as np
 
@@ -24,13 +25,13 @@ class FilterImageDataGenerator(ImageDataGenerator):
                 samplewise_std_normalization=samplewise_std_normalization,
                 dim_ordering=dim_ordering)
 
-    def flow(self, X, y=None, filters=None, batch_size=32, shuffle=True,
+    def flow(self, X, filters=None, batch_size=32, shuffle=True,
              seed=None, save_to_dir=None, save_prefix='', save_format='jpeg'):
         if filters is None:
             filters = [Noop()]
         filters = list(filters)
         return FilterNumpyArrayIterator(
-            X, y, self, filters=filters,
+            X, y=None, image_data_generator=self, filters=filters,
             dim_ordering=self.dim_ordering,
             batch_size=batch_size, shuffle=shuffle, seed=seed,
             save_to_dir=save_to_dir, save_prefix=save_prefix,
@@ -73,26 +74,29 @@ class FilterNumpyArrayIterator(BaseNumpyIterator):
             yield (index_array, filter_index_array, current_index, current_batch_size)
 
     def next(self):
-        # This mostly copied over from Keras's NumpyArrayIterator:next
+        # This is mostly copied over from Keras's NumpyArrayIterator:next
         with self.lock:
             index_array, filter_index_array, current_index, current_batch_size \
                     = next(self.index_generator)
-        batch_x = np.zeros(tuple([current_batch_size] + list(self.X.shape)[1:]))
+        batch_X = np.zeros(tuple([current_batch_size] + list(self.X.shape)[1:]))
+
         for i, (j, k) in enumerate(zip(index_array, filter_index_array)):
             x = self.X[j]
             x = self.filters[k].apply(array_to_img(x))
             x = img_to_array(x)
             x = self.image_data_generator.standardize(x)
-            batch_x[i] = x
+            batch_X[i] = x
+
         if self.save_to_dir:
             for i in range(current_batch_size):
-                img = array_to_img(batch_x[i], self.dim_ordering, scale=True)
-                fname = '{prefix}_{index}_{hash}.{format}'.format(prefix=self.save_prefix,
-                                                                  index=current_index + i,
-                                                                  hash=np.random.randint(1e4),
-                                                                  format=self.save_format)
+                img = array_to_img(batch_X[i], self.dim_ordering, scale=True)
+                fname = '{prefix}_{index}_{hash}.{format}'.format(
+                        prefix=self.save_prefix,
+                        index=current_index + i,
+                        hash=np.random.randint(1e4),
+                        format=self.save_format)
                 img.save(os.path.join(self.save_to_dir, fname))
-        if self.y is None:
-            return batch_x
-        batch_y = self.y[index_array]
-        return batch_x, batch_y
+
+        # Set y to filter ids
+        batch_y = filter_index_array
+        return batch_X, batch_y
