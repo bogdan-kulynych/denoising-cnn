@@ -8,17 +8,25 @@ from scipy import stats
 from PIL import Image, ImageFilter
 
 
-def _imagemagick(image, command):
+def _imagemagick(image, command, temp_format='jpeg'):
     """
     Execute `convert <image path> <command> <output path>` via subprocess,
     load and return the resulting image
     """
+    input_handle = None
+    output_handle = None
     try:
         input_filename = image.filename
-    except:
-        raise TypeError('Image needs to be loaded from file')
-    with tempfile.NamedTemporaryFile() as fp:
-        output_filename = fp.name
+    except AttributeError:
+        input_handle = tempfile.NamedTemporaryFile()
+        input_filename = input_handle.name
+
+    # Save image to a temporary file if it has not been loaded from a file
+    image.save(input_filename, format=temp_format)
+
+    output_handle = tempfile.NamedTemporaryFile()
+    output_filename = output_handle.name
+
     full_command = ' '.join([
         'convert',
         input_filename,
@@ -30,6 +38,10 @@ def _imagemagick(image, command):
         raise RuntimeError('Error when running `{}`'.format(
             full_command))
     result = Image.open(output_filename)
+
+    output_handle.close()
+    if input_handle is not None:
+        input_handle.close()
     return result
 
 
