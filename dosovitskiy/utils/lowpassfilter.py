@@ -4,19 +4,19 @@ from skimage.filters import gabor_kernel
 from math import cos, sin
 
 
-def lowpassfilter(img, sigma, batchsize=100, type='gaussian', verbose='false'):
+def lowpassfilter(img, sigma, batchsize=100, type='gaussian', verbose=False):
     imsize = img.shape
     if img.shape[0] > 1 and img.shape[1] > 1:
         img = np.reshape(img, (imsize[0], imsize[1], -1))
         out = np.zeros(img.shape, dtype=img.dtype)
 
         dx = round(2 * sigma)
-        tmpimg = np.concatenate((img[:, dx:0:-1, :], img, img[:, -1:-dx-1:-1, :]), axis=1)
+        tmpimg = np.concatenate((img[:, dx-1::-1, :], img, img[:, -1:-dx-1:-1, :]), axis=1)
         tmpimg = np.concatenate((tmpimg[dx-1::-1, :, :], tmpimg, tmpimg[img.shape[0]:img.shape[0]-dx-1:-1, :, :]))
         if verbose:
             print('\nPreparing the filter...')
         if type == 'gaussian':
-            lowpass = gabor_atom([sigma, sigma], 0, 0, 0, 0, tmpimg.shape[0], tmpimg.shape[1], 1).astype(img.dtype)
+            lowpass = gabor_atom([sigma, sigma], 0, 0, 0, 0, tmpimg.shape[0], tmpimg.shape[1], 1)
             lowpass = fft2(fftshift(lowpass))
         else:
             raise NotImplementedError('lowpass for flattened image')
@@ -28,7 +28,7 @@ def lowpassfilter(img, sigma, batchsize=100, type='gaussian', verbose='false'):
             if verbose:
                 print('\n  Filtering batch %d/%d...' % (batch, nbatches))
             n = m
-            m = min(m + batchsize, img.shape[2]-1)
+            m = min(m + batchsize, img.shape[2])
             tmplowpass = np.real(ifft2(fft2(tmpimg[:, :, n:m],axes=(1,0))*lowpass[:, :, None],axes=(1,0)))
             out[:, :, n:m] = tmplowpass[dx:dx + img.shape[0], dx:dx + img.shape[1], :]
 

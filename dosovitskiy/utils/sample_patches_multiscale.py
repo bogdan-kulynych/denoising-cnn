@@ -2,10 +2,10 @@ import numpy as np
 
 from tqdm import tqdm
 from numpy.random import permutation
-from scipy.misc.pilutil import imresize
+from dosovitskiy.imutils import imresize
 import matplotlib.pyplot as plt
 
-from .lowpassfilter import lowpassfilter
+from dosovitskiy.utils.lowpassfilter import lowpassfilter
 
 
 def sample_patches_multiscale(images, params, selected_images=[]):
@@ -35,20 +35,20 @@ def sample_patches_multiscale(images, params, selected_images=[]):
         scales_list = []
         for nscale in scales:
             # returns image smaller than in Matlab
-            im = imresize(selected_images[i, ::subsample_probmaps, ::subsample_probmaps, :], nscale, interp='bicubic')
+            im = imresize(selected_images[i, ::subsample_probmaps, ::subsample_probmaps, :], nscale)
 
-            plt.show()
-            plt.imshow(im)
+            # plt.show()
+            # plt.imshow(im)
 
             im = np.sum(im, axis=2)
             im = im - lowpassfilter(im, 2)
 
-            plt.imshow(im)
+            # plt.imshow(im)
 
             energy_radius = min(patchsize / subsample_probmaps / 4, im.shape[0] / 4)
             im = lowpassfilter(im ** 2, energy_radius)
 
-            plt.imshow(im)
+            # plt.imshow(im)
 
             borderwidth = np.ceil(patchsize / subsample_probmaps / 2) + 1
             im[:borderwidth, :] = 0
@@ -57,7 +57,7 @@ def sample_patches_multiscale(images, params, selected_images=[]):
             im[:, -borderwidth:] = 0
             im[im < 0] = 0
 
-            plt.imshow(im)
+            # plt.imshow(im)
 
             image_probs[i] = np.sum(im) / (im.shape[0] - 2 * borderwidth) / (im.shape[1] - 2 * borderwidth)
             scales_list.append(im)
@@ -66,7 +66,7 @@ def sample_patches_multiscale(images, params, selected_images=[]):
 
     # Sampling patches according to these probability maps
     num_patches = params['num_patches']
-    patches = np.zeros((patchsize, patchsize, 3, num_patches), dtype='uint8')
+    patches = np.zeros((num_patches, patchsize, patchsize, 3), dtype='uint8')
 
     maskradius = np.floor(patchsize / subsample_probmaps)
     mask = np.zeros((2 * maskradius + 1, 2 * maskradius + 1))
@@ -80,38 +80,37 @@ def sample_patches_multiscale(images, params, selected_images=[]):
         im = sampling_probmap[ncurrimage][ncurrscale]
         if np.any(im > 0):
             currpos = {}
-            currinds = randp(im, 1)
-            currx, curry = ind2sub(im.shape, currinds)
+            currinds = randp(im.ravel(), 1) - 1
+            currx, curry = np.unravel_index(currinds,im.shape, order='F')
 
-            currpos['nimg'] = orig_image_num[ncurrimage]
-            currpos['scale'] = ncurrscale
+            currpos['nimg'] = orig_image_num[ncurrimage][0]
+            currpos['scale'] = ncurrscale[0]
             currpos['scale_value'] = scales[currpos['scale']]
-            currpos['xc'] = ((currx - 1) * subsample_probmaps + 1) / currpos['scale_value']
-            currpos['yc'] = ((curry - 1) * subsample_probmaps + 1) / currpos['scale_value']
+            currpos['xc'] = (currx * subsample_probmaps / currpos['scale_value'])[0]
+            currpos['yc'] = (curry * subsample_probmaps / currpos['scale_value'])[0]
             currpos['patchsize'] = patchsize / currpos['scale_value']
 
+            x1 = np.round(currpos['xc'] - np.floor(currpos['patchsize'] / 2))
+            x2 = np.round(x1 + currpos['patchsize'] )
+            y1 = np.round(currpos['yc'] - np.floor(currpos['patchsize'] / 2))
+            y2 = np.round(y1 + currpos['patchsize'])
+            patches[npatch, :, :, :] = imresize(selected_images[ncurrimage, x1:x2, y1:y2, :].squeeze(), cropped_height=patchsize, cropped_width=patchsize)
+
             npatch += 1
-
-            x1 = round(currpos['xc'] - np.floor(currpos['patchsize'] / 2))
-            x2 = round(x1 + currpos['patchsize'] - 1)
-            y1 = round(currpos['yc'] - np.floor(currpos['patchsize'] / 2))
-            y2 = round(y1 + currpos['patchsize'] - 1)
-            patches[:, :, :, npatch] = imresize(selected_images[ncurrimage, x1:x2, y1:y2, :], [patchsize, patchsize])
-
-            for nscale in range(max(1, currpos['scale'] - 3), min(num_scales, currpos['scale'] + 3) + 1):
+            for nscale in range(max(0, currpos['scale'] - 3), min(num_scales, currpos['scale'] + 3)):
                 im0 = sampling_probmap[ncurrimage][nscale]
-                coeff = scales(nscale) / scales(ncurrscale)
-                x1 = round(currx * coeff) - maskradius
-                x2 = round(currx * coeff) + maskradius
-                y1 = round(curry * coeff) - maskradius
-                y2 = round(curry * coeff) + maskradius
-                x11 = max(x1, 0)
-                x21 = min(x2, im0.shape[0])
-                y11 = max(y1, 0)
-                y21 = min(y2, im0.shape[1])
+                coeff = scales[nscale] / scales[ncurrscale]
+                x1 = np.round(currx * coeff) - maskradius
+                x2 = np.round(currx * coeff) + maskradius
+                y1 = np.round(curry * coeff) - maskradius
+                y2 = np.round(curry * coeff) + maskradius
+                x11 = np.max((x1, 0))
+                x21 = np.min((x2, im0.shape[0]))
+                y11 = np.max((y1, 0))
+                y21 = np.min((y2, im0.shape[1]))
 
-                if im0[x11:x21, y11:y21].shape != mask[x11 - x1:mask.shape[0] - x2 + x21,
-                                                       y11 - y1:mask.shape[1] - y2 + y21]:
+                if im0[x11:x21, y11:y21].shape != mask[x11 - x1:mask.shape[0] - x2 + x21 - 1,
+                                                       y11 - y1:mask.shape[1] - y2 + y21 - 1].shape:
                     print(im0[x11:x21, y11:y21].shape)
                     print(mask[x11 - x1:mask.shape[0] - x2 + x21, y11 - y1:mask.shape[1] - y2 + y21])
                     print([x1, x2, y1, y2, x11, x21, y11, y21])
@@ -123,12 +122,12 @@ def sample_patches_multiscale(images, params, selected_images=[]):
                         mask[x11 - x1:mask.shape[0] - x2 + x21, y11 - y1:mask.shape[1] - y2 + y21] * \
                         sampling_probmap[ncurrimage][nscale][x11:x21, y11:y21]
 
-        pbar.update(npatch)
-        for key in currpos:
-            if key in pos:
-                pos[key] = list(pos[key]) + list(currpos[key])
-            else:
-                pos[key] = list(currpos[key])
+            pbar.update(npatch)
+            for key in currpos:
+                if key in pos:
+                    pos[key] = pos[key] + [currpos[key]]
+                else:
+                    pos[key] = [currpos[key]]
     return patches, pos
 
 
@@ -150,12 +149,3 @@ def randp(P, shape):
     else:
         return np.digitize(x, np.insert(np.cumsum(P), 0, 0) / np.sum(P))
 
-
-def sub2ind(array_shape, rows, cols):
-    return rows * array_shape[1] + cols
-
-
-def ind2sub(array_shape, ind):
-    rows = (ind.astype('int') / array_shape[1])
-    cols = (ind.astype('int') % array_shape[1])  # or numpy.mod(ind.astype('int'), array_shape[1])
-    return rows, cols

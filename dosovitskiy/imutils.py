@@ -108,7 +108,7 @@ def imresize(img, scale=None, cropped_height=None, cropped_width=None):
         cropped_width = np.ceil(img.shape[1]*scale).astype('i')
         cropped_height = np.ceil(img.shape[1] * scale).astype('i')
     elif not scale and cropped_height and cropped_height:
-        width_scale = float(cropped_width) / img.shape[0]
+        width_scale = float(cropped_width) / img.shape[1]
         height_scale = float(cropped_height) / img.shape[0]
     else:
         raise ValueError('scale or dimentions should be specified')
@@ -161,10 +161,4 @@ def preprocess_image(img):
 
 
 if __name__ == '__main__':
-    import dosovitskiy.stl10_input as stl
-
-    stl.DATA_PATH = "/home/mike/stl10_binary/unlabeled_X.bin"
-    with open(stl.DATA_PATH) as f:
-        im = stl.read_single_image(f)
-        out = imresize(im[::4,::4,:],0.512)
-        print(out.sum())
+    pass
