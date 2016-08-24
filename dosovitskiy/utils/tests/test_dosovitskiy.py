@@ -1,5 +1,5 @@
 from dosovitskiy.utils.lowpassfilter import lowpassfilter
-from dosovitskiy.utils.sample_patches_multiscale import sample_patches_multiscale
+from dosovitskiy.utils.augment_patches_distr import sample_patches_multiscale
 import dosovitskiy.stl10_input as stl
 from dosovitskiy.imutils import imresize
 import numpy as np
