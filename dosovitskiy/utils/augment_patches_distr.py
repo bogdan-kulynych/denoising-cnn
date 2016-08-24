@@ -210,35 +210,35 @@ def get_patches_rotations(pos_in, params, images):
     patchsize = params['patchsize']
     nchannels = params['nchannels']
 
-    patches_aug = np.zeros((patchsize, patchsize, nchannels, pos_in['xc'].size),dtype=np.uint8)
+    patches_aug = np.zeros((pos_in['xc'].size, patchsize, patchsize, nchannels),dtype=np.uint8)
     npatch = 0
-    goodpos = np.ones(pos_in['xc'].shape, dtype=np.bool)
-    patches_npos = np.zeros((pos_in['xc'].size,1))
+
+    patches_npos = np.zeros(pos_in['xc'].size, dtype=np.int32)
     unique_nimg = np.unique(pos_in['nimg'])
     for n in tqdm(range(unique_nimg.size), desc='Extracting patches: '):
         nimg = unique_nimg[n]
-        curr_selection = np.where(pos_in.nimg == nimg)
-        currimg = images[nimg, :]
+        curr_selection = np.where(pos_in['nimg'] == nimg)[0]
+        currimg = images[nimg]
         if currimg.shape[2] < 3:
             currimg = np.tile(currimg[:,:,None],(1,1,3))
 
-        for npos in curr_selection.flatten():
+        for npos in curr_selection:
             curr_angle = pos_in['angle'][npos]
             ps = pos_in['patchsize'][npos]
-            ps_rot = pos_in['patchsize'][npos] * np.sqrt(2) * np.cos(np.mod(curr_angle,90)*np.pi/180 - np.pi/4)
-            x1 = np.max((np.round(pos_in.xc(npos) - ps_rot/2),0))
-            x2 = np.min((np.round(pos_in.xc(npos) + ps_rot/2) + 1,currimg.shape[0]))
-            y1 = np.max((np.round(pos_in.yc(npos) - ps_rot/2),0))
-            y2 = np.min((np.round(pos_in.yc(npos) + ps_rot/2) + 1,currimg.shape[1]))
+            ps_rot = ps * np.sqrt(2) * np.cos(np.mod(curr_angle,90)*np.pi/180 - np.pi/4)
+            x1 = np.max((np.round(pos_in['xc'][npos] - ps_rot/2),0))
+            x2 = np.min((np.round(pos_in['xc'][npos] + ps_rot/2) + 1,currimg.shape[0]))
+            y1 = np.max((np.round(pos_in['yc'][npos] - ps_rot/2),0))
+            y2 = np.min((np.round(pos_in['yc'][npos] + ps_rot/2) + 1,currimg.shape[1]))
             if y2-y1 >= ps_rot-1 and x2-x1 >= ps_rot-1 and ps_rot > 0:
-                npatch = npatch+1
+                npatch += 1
                 patch_tmp = currimg[x1:x2, y1:y2]
                 if curr_angle != 0:
                     patch_tmp_rot = imrotate(patch_tmp, curr_angle, 'bilinear')
                 else:
                     patch_tmp_rot = patch_tmp
-                patch_to_save = patch_tmp_rot[np.max(np.floor(ps_rot/2 - ps/2),0):np.min(np.ceil(ps_rot/2 + ps/2)+1,patch_tmp_rot.shape[0]),
-                    np.max(np.floor(ps_rot/2 - ps/2),0) : np.min(np.ceil(ps_rot/2 + ps/2)+1,patch_tmp_rot.shape[1]), :]
+                patch_to_save = patch_tmp_rot[np.max((np.floor(ps_rot/2 - ps/2),0)):np.min((np.ceil(ps_rot/2 + ps/2) + 1,patch_tmp_rot.shape[0])),
+                    np.max((np.floor(ps_rot/2 - ps/2),0)) : np.min((np.ceil(ps_rot/2 + ps/2) + 1,patch_tmp_rot.shape[1])), :]
                 patches_aug[npatch] = imresize(patch_to_save,cropped_width=patchsize, cropped_height=patchsize).astype(np.uint8)
                 patches_npos[npatch] = npos
 
@@ -252,7 +252,7 @@ def get_patches_rotations(pos_in, params, images):
 
 
 def color_transform(img_in, M):
-    return np.sum(img_in.transpose((0,1,2,4,3)) * M.transpose((2,3,0,1,4)), axis = 2).squeeze()
+    return np.sum(img_in[:,:,:,:,None].transpose((0,1,2,4,3)) * M[:,:,None,None,None].transpose((2,3,0,1,4)), axis = 2).squeeze()
 
 
 def adjust_color(patches, pos, batchsize=10000):
@@ -261,7 +261,7 @@ def adjust_color(patches, pos, batchsize=10000):
 
     min_in = np.min(patches).astype(np.float32)
     max_in = np.max(patches).astype(np.float32)
-    mean_in = np.mean(np.mean(np.mean(patches, 0), 1), 3).astype(np.float32)
+    mean_in = np.mean(patches, (1,2,0)).astype(np.float32)
 
     patches_out = np.zeros(patches.shape, np.uint8)
 
@@ -269,33 +269,33 @@ def adjust_color(patches, pos, batchsize=10000):
     v = matfile['v'].astype(np.float32)
     d = matfile['d'].astype(np.float32)
 
-    color_deform = np.concatenate((pos['color1_deform'], pos['color2_deform'], pos['color3_deform']),axis=1)
+    color_deform = np.stack((pos['color1_deform'], pos['color2_deform'], pos['color3_deform']))
 
-    for batch in range(num_batches):
-        n1 = (batch - 1) * batchsize
-        n2 = np.min((batch * batchsize + 1, patches.shape[3]))
-        patches_batch = patches[n1:n2, :].astype(np.float32)
+    for batch in np.arange(num_batches):
+        n1 = batch * batchsize
+        n2 = np.min(((batch + 1) * batchsize, patches.shape[0]))
+        patches_batch = patches[n1:n2].astype(np.float32)
         patches_batch = patches_batch - mean_in
         patches_batch = (patches_batch - min_in) / (max_in - min_in)
 
         curr_min = np.min(patches_batch)
         curr_max = np.max(patches_batch)
-        if patches.shape[2] == 1:
-            patches_batch = np.tile(patches_batch, (1,1,3,1))
-        pp1 = color_transform(patches_batch, v)
-        pp2 = pp1 * color_deform[n1:n2].reshape((1,1,3,pp1.shape[3]))
-        pp3 = color_transform(pp2, v.inv())
+        if patches.shape[3] == 1:
+            patches_batch = np.tile(patches_batch, (1,1,1,3))
+        pp1 = color_transform(patches_batch.transpose((1,2,3,0)), v)
+        pp2 = pp1 * color_deform[:,n1:n2].reshape((1,1,3,pp1.shape[3]))
+        pp3 = color_transform(pp2, np.linalg.inv(v))
         if patches.shape[2] == 1:
             pp3 = pp3.mean(axis=2)
         pp3[pp3 > curr_max] = curr_max
         pp3[pp3 < curr_min] = curr_min
 
-        pp3 = pp3 + (mean_in - min_in) / (max_in - min_in)
+        pp3 += ((mean_in - min_in) / (max_in - min_in))[None,None,:,None]
 
         pp3[pp3 < 0] = 0
         pp3[pp3 > 1] = 1
 
-        patches_out[n1:n2, :] = (pp3 * 255).astype(np.uint8)
+        patches_out[n1:n2, :] = (pp3.transpose((3,0,1,2)) * 255).astype(np.uint8)
 
     return patches_out
 
@@ -304,7 +304,7 @@ def hsv2rgb_batch(hsv_images):
     input_size = hsv_images.shape
     rgb_images = np.zeros(input_size, dtype=np.uint8)
 
-    for n in range(np.prod(input_size[3:])):
+    for n in range(input_size[0]):
         currimg = hsv_images[n]
         rgb_images[n] = (255*hsv2rgb(currimg)).astype(np.uint8)
     return rgb_images
@@ -316,7 +316,7 @@ def rgb2hsv_batch(rgb_images):
     min_in = np.min(rgb_images)
     max_in = np.max(rgb_images)
 
-    for n in range(np.prod(input_size[3:])):
+    for n in range(input_size[0]):
         currimg = rgb_images[n]
         if currimg.dtype==np.float32:
             currimg = currimg.astype(np.float32)
@@ -329,24 +329,24 @@ def power_transform(in_images, params, batchsize=1000):
     num_batches = np.ceil(in_images.shape[3] / batchsize)
     out_images = np.zeros(in_images.shape, dtype=np.uint8)
 
-    for batch in range(num_batches):
-        n1 = (batch - 1) * batchsize
-        n2 = np.min((batch * batchsize, in_images.shape[3]))
+    for batch in np.arange(num_batches):
+        n1 = batch * batchsize
+        n2 = np.min(((batch + 1) * batchsize, in_images.shape[0]))
         in_batch = in_images[n1:n2].astype(np.float32)
-        in_batch -= np.min(np.min(np.min(in_batch, axis=0),axis=1),axis=2)
-        max_in_batch = np.max(np.max(np.max(in_batch, 0), 1), 2)
-        in_batch /= np.max((max_in_batch, 1e-3))
-        hsv_batch = rgb2hsv_batch(in_batch);
+        in_batch -= np.min(in_batch, axis=(1, 2, 3))[:,None,None,None]
+        max_in_batch = np.max(in_batch, axis=(1,2,3))
+        in_batch /= np.maximum(max_in_batch, 1e-3)[:,None,None,None]
+        hsv_batch = rgb2hsv_batch(in_batch)
 
-        hsv_batch[:,:,:,2] **= params['v_power_deform'][n1:n2].reshape((1,1,1,n2 - n1 + 1))
-        hsv_batch[:,:,:,2] *= params['v_mult_deform'][n1:n2].reshape((1,1,1,n2 - n1 + 1))
-        hsv_batch[:,:,:,2] += params['v_add_deform'][n1:n2].reshape((1,1,1,n2 - n1 + 1))
+        hsv_batch[:,:,:,2] **= params['v_power_deform'][n1:n2].reshape((n2 - n1,1,1))
+        hsv_batch[:,:,:,2] *= params['v_mult_deform'][n1:n2].reshape((n2 - n1,1,1))
+        hsv_batch[:,:,:,2] += params['v_add_deform'][n1:n2].reshape((n2 - n1,1,1))
 
-        hsv_batch[:,:,:,1] **= params['s_power_deform'][n1:n2].reshape((1,1,1,n2 - n1 + 1))
-        hsv_batch[:,:,:,1] *= params['s_mult_deform'][n1:n2].reshape((1,1,1,n2 - n1 + 1))
-        hsv_batch[:,:,:,1] += params['s_add_deform'][n1:n2].reshape((1,1,1,n2 - n1 + 1))
+        hsv_batch[:,:,:,1] **= params['s_power_deform'][n1:n2].reshape((n2 - n1,1,1))
+        hsv_batch[:,:,:,1] *= params['s_mult_deform'][n1:n2].reshape((n2 - n1,1,1))
+        hsv_batch[:,:,:,1] += params['s_add_deform'][n1:n2].reshape((n2 - n1,1,1))
 
-        hsv_batch[:,:,:,0] = np.mod(hsv_batch[:,:,:,0] + params['h_add_deform'][n1:n2].reshape((1,1,1,n2 - n1 + 1)), 1)
+        hsv_batch[:,:,:,0] = np.mod(hsv_batch[:,:,:,0] + params['h_add_deform'][n1:n2].reshape((n2 - n1,1,1)), 1)
 
         hsv_batch[hsv_batch < 0] = 0
         hsv_batch[hsv_batch > 1] = 1
@@ -371,7 +371,7 @@ params = {
           'scale_range': [1/np.sqrt(2), np.sqrt(2)],
           'position_range': [-0.25, 0.25],
           'angle_range': [-20, 20],
-
+          'nchannels': 3,
           }
 
 params['num_patches'] = min(params['num_patches'], images.shape[0])
@@ -388,7 +388,7 @@ all_coeffs = [1, 1, 0.5, 2, 2, 0.5, 0.5, 0.1, 0.1, 0.1]
 
 pos_aug4 = augment_position_scale_color(pos_aug3,params)
 
-curr_selection = np.arange(len(pos_aug4['xc']))
+curr_selection = np.arange(pos_aug4['xc'].size)
 
 xc_shape = pos_aug4['xc'].shape
 pos_aug4['color1_deform'] = 2**(randn(*xc_shape)*all_coeffs[0])
@@ -409,9 +409,9 @@ patches_aug5 = adjust_color(patches_aug5, pos_aug5, 10000)
 patches_aug5 = power_transform(patches_aug5, pos_aug5, 10000)
 
 images = patches_aug5
-rename = np.arange(max(pos_aug5.detector))
-rename[np.unique(pos_aug5['detector'])] = np.arange(len(np.unique(pos_aug5['detector']))-1)
-labels = np.reshape(rename[pos_aug5['detector']],(-1,1))
+rename = np.arange(np.max(pos_aug5['detector'])+1)
+rename[np.unique(pos_aug5['detector'])] = np.arange(len(np.unique(pos_aug5['detector'])))
+labels = rename[pos_aug5['detector']]
 print('Saving to %s...', 'Not defined')
 np.savez(save_path, images=images,labels=labels)
 
