@@ -1,4 +1,5 @@
 from dosovitskiy.stl10_input import read_all_images
+from dosovitskiy.stl10_input import plot_image
 from dosovitskiy.utils.lowpassfilter import lowpassfilter
 from dosovitskiy.imutils import imresize
 
@@ -14,6 +15,9 @@ import numpy as np
 from numpy.random import permutation, rand, randn
 
 from skimage.color import hsv2rgb, rgb2hsv
+
+import os
+
 
 def sample_patches_multiscale(images, params, selected_images=[]):
     scales = params['scales']
@@ -57,7 +61,7 @@ def sample_patches_multiscale(images, params, selected_images=[]):
 
             # plt.imshow(im)
 
-            borderwidth = np.ceil(patchsize / subsample_probmaps / 2) + 1
+            borderwidth = (np.ceil(patchsize / subsample_probmaps / 2) + 1).astype(np.int)
             im[:borderwidth, :] = 0
             im[-borderwidth:, :] = 0
             im[:, :borderwidth] = 0
@@ -75,12 +79,12 @@ def sample_patches_multiscale(images, params, selected_images=[]):
     num_patches = params['num_patches']
     patches = np.zeros((num_patches, patchsize, patchsize, 3), dtype='uint8')
 
-    maskradius = np.floor(patchsize / subsample_probmaps)
+    maskradius = np.floor(patchsize / subsample_probmaps).astype(np.int)
     mask = np.zeros((2 * maskradius + 1, 2 * maskradius + 1))
 
     npatch = 0
     pos = {}
-    pbar = tqdm(range(num_patches), desc='Sampling patches: ')
+    pbar = tqdm(total=num_patches, desc='Sampling patches: ')
     while npatch < num_patches:
         ncurrscale = randp(scale_probs, 1) - 1
         ncurrimage = randp(image_probs, 1) - 1
@@ -97,20 +101,20 @@ def sample_patches_multiscale(images, params, selected_images=[]):
             currpos['yc'] = ((curry * subsample_probmaps + 1)/ currpos['scale_value'])[0] - 1
             currpos['patchsize'] = patchsize / currpos['scale_value']
 
-            x1 = np.round(currpos['xc'] - np.floor(currpos['patchsize'] / 2))
-            x2 = np.round(x1 + currpos['patchsize'] )
-            y1 = np.round(currpos['yc'] - np.floor(currpos['patchsize'] / 2))
-            y2 = np.round(y1 + currpos['patchsize'])
+            x1 = np.round(currpos['xc'] - np.floor(currpos['patchsize'] / 2)).astype(np.int)
+            x2 = np.round(x1 + currpos['patchsize']).astype(np.int)
+            y1 = np.round(currpos['yc'] - np.floor(currpos['patchsize'] / 2)).astype(np.int)
+            y2 = np.round(y1 + currpos['patchsize']).astype(np.int)
             patches[npatch, :, :, :] = imresize(selected_images[ncurrimage, x1:x2, y1:y2, :].squeeze(), cropped_height=patchsize, cropped_width=patchsize)
 
             npatch += 1
             for nscale in range(max(0, currpos['scale'] - 3), min(num_scales, currpos['scale'] + 4)):
                 im0 = sampling_probmap[ncurrimage][nscale]
                 coeff = scales[nscale] / scales[ncurrscale]
-                x1 = np.round(currx * coeff) - maskradius
-                x2 = np.round(currx * coeff) + maskradius
-                y1 = np.round(curry * coeff) - maskradius
-                y2 = np.round(curry * coeff) + maskradius
+                x1 = (np.round(currx * coeff) - maskradius).astype(np.int)
+                x2 = (np.round(currx * coeff) + maskradius).astype(np.int)
+                y1 = (np.round(curry * coeff) - maskradius).astype(np.int)
+                y2 = (np.round(curry * coeff) + maskradius).astype(np.int)
                 x11 = np.max((x1, 0))
                 x21 = np.min((x2, im0.shape[0]))
                 y11 = np.max((y1, 0))
@@ -124,12 +128,13 @@ def sample_patches_multiscale(images, params, selected_images=[]):
 
                 if params['one_patch_per_image']:
                     sampling_probmap[ncurrimage][nscale] = 0  # Don't sample from the same image twice!
+                    image_probs[ncurrimage] = 0
                 else:
                     sampling_probmap[ncurrimage][nscale][x11:x21, y11:y21] = \
                         mask[x11 - x1:mask.shape[0] - x2 + x21, y11 - y1:mask.shape[1] - y2 + y21] * \
                         sampling_probmap[ncurrimage][nscale][x11:x21, y11:y21]
 
-            pbar.update(npatch)
+            pbar.update(1)
             for key in currpos:
                 if key in pos:
                     pos[key] = pos[key] + [currpos[key]]
@@ -154,7 +159,7 @@ def randp(P, shape):
         Warning(':ZeroProbabilities', 'All zero probabilities')
         return np.zeros(x.shape)
     else:
-        return np.digitize(x, np.insert(np.cumsum(P), 0, 0) / np.sum(P))
+        return np.digitize(x, np.insert(np.cumsum(P), 0, 0) / np.sum(P)).astype(np.int)
 
 
 def augment_position_scale_color(pos_in, params):
@@ -231,7 +236,6 @@ def get_patches_rotations(pos_in, params, images):
             y1 = np.max((np.round(pos_in['yc'][npos] - ps_rot/2),0))
             y2 = np.min((np.round(pos_in['yc'][npos] + ps_rot/2) + 1,currimg.shape[1]))
             if y2-y1 >= ps_rot-1 and x2-x1 >= ps_rot-1 and ps_rot > 0:
-                npatch += 1
                 patch_tmp = currimg[x1:x2, y1:y2]
                 if curr_angle != 0:
                     patch_tmp_rot = imrotate(patch_tmp, curr_angle, 'bilinear')
@@ -241,6 +245,7 @@ def get_patches_rotations(pos_in, params, images):
                     np.max((np.floor(ps_rot/2 - ps/2),0)) : np.min((np.ceil(ps_rot/2 + ps/2) + 1,patch_tmp_rot.shape[1])), :]
                 patches_aug[npatch] = imresize(patch_to_save,cropped_width=patchsize, cropped_height=patchsize).astype(np.uint8)
                 patches_npos[npatch] = npos
+                npatch += 1
 
     patches_aug = patches_aug[:npatch]
     patches_npos = patches_npos[:npatch]
@@ -355,27 +360,27 @@ def power_transform(in_images, params, batchsize=1000):
 
     return out_images
 
-images = read_all_images('/home/mike/stl10_binary/train_X.bin')[:10]
-save_path = '/home/mike/stl_dosov/training_data_STL_16000.npz'
+save_path = '/home/mike/stl_dosov/unlabeled_data_STL_16000.npz'
 
 np.random.seed(42)
 
+images = read_all_images('/home/mike/stl10_binary/unlabeled_X.bin')
+
 params = {
-          'subsample_probmaps': 4,
-          'sample_patches_per_image': 1,
-          'patchsize':32,
-          'num_patches':16000,
-          'one_patch_per_image': True,
-          'scales': list(map(lambda x: pow(0.8,x),range(3,-1,-1))),
-          'num_deformations': 150,
-          'scale_range': [1/np.sqrt(2), np.sqrt(2)],
-          'position_range': [-0.25, 0.25],
-          'angle_range': [-20, 20],
-          'nchannels': 3,
-          }
+    'subsample_probmaps': 4,
+    'sample_patches_per_image': 1,
+    'patchsize': 32,
+    'num_patches': 16000,
+    'one_patch_per_image': True,
+    'scales': list(map(lambda x: pow(0.8, x), range(3, -1, -1))),
+    'num_deformations': 150,
+    'scale_range': [1 / np.sqrt(2), np.sqrt(2)],
+    'position_range': [-0.25, 0.25],
+    'angle_range': [-20, 20],
+    'nchannels': 3,
+}
 
 params['num_patches'] = min(params['num_patches'], images.shape[0])
-
 
 patches, pos = sample_patches_multiscale(images, params)
 
@@ -403,6 +408,8 @@ pos_aug4['s_add_deform'] = all_coeffs[8]*(rand(*xc_shape)*2-1)
 pos_aug4['h_add_deform'] = all_coeffs[9]*(rand(*xc_shape)*2-1)
 
 patches_aug5, pos_aug5 = get_patches_rotations(pos_aug4, params, images)
+
+images = []
 
 print('Augmenting color...')
 patches_aug5 = adjust_color(patches_aug5, pos_aug5, 10000)
